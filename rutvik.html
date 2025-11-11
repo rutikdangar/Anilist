@@ -1,0 +1,498 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>AniVerse Hub — Final</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body { background-color: #f9fafb; font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial; }
+    .anime-card { transition: transform .22s ease, box-shadow .22s ease; }
+    .anime-card:hover { transform: translateY(-6px); box-shadow: 0 12px 30px rgba(10,10,10,0.08); }
+    .progress-track { height: 10px; border-radius: 999px; background: rgba(0,0,0,0.06); overflow: hidden; }
+    .progress-fill { height: 100%; width: 0%; border-radius: 999px; transition: width 160ms linear; }
+    .truncate-2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+    .icon-btn { display:inline-flex; align-items:center; justify-content:center; gap:.35rem; padding:.35rem .5rem; border-radius:.375rem; cursor:pointer; }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col">
+
+  <!-- Header -->
+  <header class="bg-white shadow-sm p-4 flex flex-col sm:flex-row items-center justify-between gap-3">
+    <div class="flex items-center gap-3">
+      <h1 class="text-2xl font-bold text-red-600">AniVerse Hub</h1>
+      <span id="userTag" class="text-sm text-gray-500 hidden"></span>
+    </div>
+
+    <nav class="flex items-center gap-2">
+      <button id="homeBtn" class="px-3 py-1 text-gray-700 hover:text-red-600">Home</button>
+      <button id="myListBtn" class="px-3 py-1 text-gray-700 hover:text-red-600 hidden">My List</button>
+      <button id="profileBtn" class="px-3 py-1 text-gray-700 hover:text-red-600 hidden">Profile</button>
+      <button id="adminBtn" class="px-3 py-1 text-gray-700 hover:text-red-600 hidden">Admin</button>
+      <button id="loginBtn" class="px-3 py-1 text-white bg-red-600 rounded hover:bg-red-700">Login</button>
+      <button id="logoutBtn" class="px-3 py-1 text-gray-700 hover:text-red-600 hidden">Logout</button>
+    </nav>
+  </header>
+
+  <!-- Main -->
+  <main id="app" class="flex-grow p-4 max-w-7xl mx-auto"></main>
+
+  <script>
+  /***********************
+   * Storage keys
+   ***********************/
+  const LOCAL_KEYS = {
+    ANIME: 'av_anime_list_v1',
+    MYLIST: 'av_mylist_v1'
+  };
+
+  function saveAnimeList(list) { localStorage.setItem(LOCAL_KEYS.ANIME, JSON.stringify(list)); }
+  function loadAnimeList() { const r = localStorage.getItem(LOCAL_KEYS.ANIME); return r ? JSON.parse(r) : null; }
+  function saveMyList(obj) { localStorage.setItem(LOCAL_KEYS.MYLIST, JSON.stringify(obj)); }
+  function loadMyList() { const r = localStorage.getItem(LOCAL_KEYS.MYLIST); return r ? JSON.parse(r) : {}; }
+
+  /***********************
+   * App state
+   ***********************/
+  const app = document.getElementById('app');
+  const homeBtn = document.getElementById('homeBtn');
+  const myListBtn = document.getElementById('myListBtn');
+  const profileBtn = document.getElementById('profileBtn');
+  const adminBtn = document.getElementById('adminBtn');
+  const loginBtn = document.getElementById('loginBtn');
+  const logoutBtn = document.getElementById('logoutBtn');
+  const userTag = document.getElementById('userTag');
+
+  let loggedIn = false;
+  let isAdmin = false;
+  let username = '';
+  let currentGenre = 'All';
+  let searchTerm = '';
+  let sortOption = 'default';
+  let animeList = [];
+  let myList = loadMyList();
+
+  /***********************
+   * Default anime
+   ***********************/
+  const DEFAULT_ANIME = [
+    { id: 1, name: 'Attack on Titan', score: 9.1, episodes: 90, genre: 'Action', themeColor: '#a8dadc', image: '', description: 'Eren Yeager vows to destroy all Titans after his mother\'s death.' },
+    { id: 2, name: 'Spy x Family', score: 8.7, episodes: 25, genre: 'Comedy', themeColor: '#f1faee', image: 'https://placehold.co/600x400/f1faee/1d3557?text=Spy+Family', description: 'A fake family hides secret jobs: spy, assassin, telepath—chaos ensues.' },
+    { id: 3, name: 'Death Note', score: 9.0, episodes: 37, genre: 'Mystery', themeColor: '#457b9d', image: 'https://placehold.co/600x400/457b9d/ffffff?text=Death+Note', description: 'A notebook with deadly power falls into the hands of a student.' },
+    { id: 4, name: 'Your Name.', score: 8.9, episodes: 1, genre: 'Romance', themeColor: '#4c4d92', image: 'https://placehold.co/600x400/4c4d92/ffffff?text=Your+Name', description: 'Two strangers swap bodies and across time try to meet.' },
+    { id: 5, name: 'One Piece', score: 8.7, episodes: 1100, genre: 'Adventure', themeColor: '#a8dadc', image: 'https://placehold.co/600x400/a8dadc/1d3557?text=One+Piece', description: 'Luffy sails to find One Piece and become Pirate King.' },
+    { id: 6, name: 'Naruto', score: 8.3, episodes: 720, genre: 'Action', themeColor: '#fefae0', image: 'https://placehold.co/600x400/fefae0/1d3557?text=Naruto', description: 'A young ninja dreams of becoming Hokage.' },
+    { id: 7, name: 'Demon Slayer', score: 8.8, episodes: 55, genre: 'Action', themeColor: '#ffddd2', image: 'https://placehold.co/600x400/ffddd2/1d3557?text=Demon+Slayer', description: 'Tanjiro fights demons to save his sister.' },
+    { id: 8, name: 'Jujutsu Kaisen', score: 8.6, episodes: 47, genre: 'Action', themeColor: '#ffc8dd', image: 'https://placehold.co/600x400/ffc8dd/1d3557?text=JJK', description: 'A boy becomes involved with sorcerers and curses.' },
+    { id: 9, name: 'Tokyo Ghoul', score: 8.0, episodes: 48, genre: 'Horror', themeColor: '#dad7cd', image: 'https://placehold.co/600x400/dad7cd/1d3557?text=Tokyo+Ghoul', description: 'Half-ghoul struggles with identity and survival.' },
+    { id:10, name: 'FMA: Brotherhood', score: 9.2, episodes: 64, genre: 'Fantasy', themeColor: '#bee3db', image: 'https://placehold.co/600x400/bee3db/1d3557?text=FMA', description: 'Brothers use alchemy to restore their bodies.' },
+    { id:11, name: 'Chainsaw Man', score: 8.5, episodes: 12, genre: 'Action', themeColor: '#edf6f9', image: 'https://placehold.co/600x400/edf6f9/1d3557?text=Chainsaw+Man', description: 'Denji fights devils fused with his body.' },
+    { id:12, name: 'Bleach: TYBW', score: 8.9, episodes: 52, genre: 'Action', themeColor: '#ade8f4', image: 'https://placehold.co/600x400/ade8f4/1d3557?text=Bleach', description: 'Ichigo battles in the Thousand-Year Blood War.' },
+    { id:13, name: 'Re:Zero', score: 8.4, episodes: 50, genre: 'Fantasy', themeColor: '#9bf6ff', image: 'https://placehold.co/600x400/9bf6ff/1d3557?text=Re+Zero', description: 'Time resets on death in a brutal fantasy loop.' },
+    { id:14, name: 'My Hero Academia', score: 8.2, episodes: 140, genre: 'Action', themeColor: '#bde0fe', image: 'https://placehold.co/600x400/bde0fe/1d3557?text=MHA', description: 'A world of heroes — one boy trains to be the best.' },
+    { id:15, name: 'Steins;Gate', score: 9.1, episodes: 24, genre: 'Sci-Fi', themeColor: '#a3b18a', image: 'https://placehold.co/600x400/a3b18a/1d3557?text=Steins;Gate', description: 'Friends accidentally invent time travel with heavy consequences.' }
+  ];
+
+  /***********************
+   * Init
+   ***********************/
+  function initData() {
+    const stored = loadAnimeList();
+    if (stored && Array.isArray(stored) && stored.length) animeList = stored;
+    else { animeList = DEFAULT_ANIME.slice(); saveAnimeList(animeList); }
+    myList = loadMyList();
+    updateNav();
+  }
+
+  /***********************
+   * Nav render/update
+   ***********************/
+  function updateNav() {
+    // When logged out: only show Home + Login
+    if (!loggedIn) {
+      myListBtn.classList.add('hidden');
+      profileBtn.classList.add('hidden');
+      adminBtn.classList.add('hidden');
+      logoutBtn.classList.add('hidden');
+      loginBtn.classList.remove('hidden');
+      userTag.classList.add('hidden');
+    } else {
+      // logged in
+      myListBtn.classList.remove('hidden');
+      profileBtn.classList.remove('hidden');
+      logoutBtn.classList.remove('hidden');
+      loginBtn.classList.add('hidden');
+      userTag.classList.remove('hidden');
+      userTag.textContent = `${username}${isAdmin ? ' (admin)' : ''}`;
+      adminBtn.classList.toggle('hidden', !isAdmin);
+    }
+  }
+
+  /***********************
+   * Helpers
+   ***********************/
+  function formatEpisodes(n) { return (n === 1) ? 'Movie' : `${n} eps`; }
+  function getContrast(hex) {
+    try {
+      const h = hex.replace('#','');
+      const r = parseInt(h.substring(0,2),16);
+      const g = parseInt(h.substring(2,4),16);
+      const b = parseInt(h.substring(4,6),16);
+      const yiq = ((r*299)+(g*587)+(b*114))/1000;
+      return yiq >= 128 ? '#111827' : '#fff';
+    } catch(e){ return '#111827'; }
+  }
+  function randomColor() {
+    const vals = '89abce'.split('');
+    let hex = '#';
+    for (let i=0;i<6;i++) hex += vals[Math.floor(Math.random()*vals.length)];
+    return hex;
+  }
+
+  /***********************
+   * Pages
+   ***********************/
+  function renderLoginPage() {
+    app.innerHTML = `
+      <div class="flex items-center justify-center h-[72vh]">
+        <div class="bg-white p-8 rounded-lg shadow-md w-full max-w-md">
+          <h2 class="text-2xl font-bold mb-4 text-center">Login</h2>
+          <form id="loginForm" class="space-y-3">
+            <input id="loginUser" type="text" placeholder="admin or user" class="w-full border px-3 py-2 rounded" required />
+            <input id="loginPass" type="password" placeholder="password" class="w-full border px-3 py-2 rounded" required />
+            <div class="flex gap-2">
+              <button type="submit" class="flex-1 bg-red-600 text-white py-2 rounded hover:bg-red-700">Login</button>
+              <button id="guestBtn" type="button" class="flex-none border px-3 py-2 rounded">Guest</button>
+            </div>
+            <p class="text-xs text-gray-500 text-center mt-2">Use <strong>admin/password</strong> or <strong>user/password</strong></p>
+          </form>
+        </div>
+      </div>
+    `;
+    document.getElementById('guestBtn').addEventListener('click', () => {
+      loggedIn = false; username = ''; isAdmin = false; updateNav(); renderLoginPage();
+    });
+    document.getElementById('loginForm').addEventListener('submit', (e) => {
+      e.preventDefault();
+      const user = document.getElementById('loginUser').value.trim().toLowerCase();
+      const pass = document.getElementById('loginPass').value;
+      if (pass === 'password' && user) {
+        loggedIn = true; username = user; isAdmin = (user === 'admin');
+        updateNav(); renderHomePage();
+      } else alert('Invalid credentials. Use "admin/password" or "user/password".');
+    });
+  }
+
+  function renderHomePage() {
+    // filter & sort
+    let filtered = animeList.filter(a =>
+      (currentGenre === 'All' || a.genre === currentGenre) &&
+      a.name.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+    if (sortOption === 'rating') filtered.sort((a,b) => b.score - a.score);
+    else if (sortOption === 'episodes') filtered.sort((a,b) => b.episodes - a.episodes);
+
+    const genres = ['All', ...Array.from(new Set(animeList.map(a => a.genre)))];
+    const genreButtons = genres.map(g => `<button onclick="setGenre('${g}')" class="px-3 py-1 rounded-full text-sm ${currentGenre === g ? 'bg-red-600 text-white' : 'border text-gray-700 hover:bg-gray-100'}">${g}</button>`).join('');
+
+    const cards = filtered.length ? filtered.map((a) => {
+      const inList = !!myList[a.id];
+      return `
+      <div class="anime-card bg-white rounded-lg overflow-hidden shadow-sm cursor-pointer" data-id="${a.id}">
+        <img src="${a.image}" alt="${a.name}" class="w-full h-44 object-cover">
+        <div class="p-3">
+          <div class="flex justify-between items-start gap-3">
+            <h3 class="font-semibold text-lg truncate">${a.name}</h3>
+            <div class="text-xs font-semibold px-2 py-1 rounded" style="background:${a.themeColor}; color: ${getContrast(a.themeColor)}">${a.score.toFixed(1)}</div>
+          </div>
+          <p class="text-sm text-gray-500 mt-1">${a.genre} • ${formatEpisodes(a.episodes)}</p>
+          <p class="text-sm text-gray-600 mt-2 truncate-2">${a.description}</p>
+
+          <div class="mt-3 flex gap-2">
+            <button data-action="view" data-id="${a.id}" class="flex-1 bg-indigo-600 text-white py-1 rounded text-sm hover:bg-indigo-700">View</button>
+            <button data-action="add" data-id="${a.id}" class="flex-none ${inList ? 'bg-green-600 hover:bg-green-700' : 'bg-yellow-500 hover:bg-yellow-600'} text-white py-1 px-3 rounded text-sm">
+              ${inList ? 'In List' : 'Add'}
+            </button>
+          </div>
+        </div>
+      </div>`;
+    }).join('') : `<p class="text-center text-gray-500 col-span-full">No anime found</p>`;
+
+    app.innerHTML = `
+      <div class="max-w-3xl mx-auto mb-5">
+        <div class="flex flex-col sm:flex-row gap-3">
+          <input id="searchInput" type="search" placeholder="Search anime..." class="flex-1 border px-3 py-2 rounded shadow-sm" value="${searchTerm}">
+          <select id="sortSelect" class="border px-3 py-2 rounded">
+            <option value="default" ${sortOption==='default'?'selected':''}>Default</option>
+            <option value="rating" ${sortOption==='rating'?'selected':''}>Rating (High → Low)</option>
+            <option value="episodes" ${sortOption==='episodes'?'selected':''}>Episodes (High → Low)</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="mb-4 flex flex-wrap gap-2 justify-center">${genreButtons}</div>
+
+      <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+        ${cards}
+      </div>
+    `;
+
+    // listeners
+    document.getElementById('searchInput').addEventListener('input', (e) => { searchTerm = e.target.value; renderHomePage(); });
+    document.getElementById('sortSelect').addEventListener('change', (e) => { sortOption = e.target.value; renderHomePage(); });
+
+    // card buttons delegated
+    app.querySelectorAll('button[data-action]').forEach(btn => {
+      btn.addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        const id = Number(btn.getAttribute('data-id'));
+        const action = btn.getAttribute('data-action');
+        if (action === 'view') viewAnimeDetail(id);
+        else if (action === 'add') toggleAddToMyList(id);
+      });
+    });
+
+    // clicking whole card also views
+    app.querySelectorAll('.anime-card').forEach(card => {
+      card.addEventListener('click', () => {
+        const id = Number(card.getAttribute('data-id'));
+        viewAnimeDetail(id);
+      });
+    });
+  }
+
+  function viewAnimeDetail(id) {
+    const a = animeList.find(x => x.id === id);
+    if (!a) return;
+    const inList = !!myList[a.id];
+    app.innerHTML = `
+      <div class="max-w-3xl mx-auto bg-white p-6 rounded-lg shadow-md">
+        <button id="backBtn" class="mb-4 bg-gray-100 px-3 py-1 rounded">← Back</button>
+        <img src="${a.image}" class="w-full h-64 object-cover rounded mb-4">
+        <div class="flex items-center justify-between gap-4 mb-2">
+          <h2 class="text-2xl font-bold">${a.name}</h2>
+          <div class="text-sm font-semibold px-3 py-1 rounded" style="background:${a.themeColor}; color:${getContrast(a.themeColor)}">${a.score.toFixed(1)}</div>
+        </div>
+        <p class="text-gray-600 mb-1"><strong>Genre:</strong> ${a.genre}</p>
+        <p class="text-gray-600 mb-1"><strong>Episodes:</strong> ${a.episodes}</p>
+        <p class="text-gray-700 mb-4">${a.description}</p>
+
+        <div class="flex gap-2">
+          <button id="detailAdd" class="${inList ? 'bg-green-600' : 'bg-yellow-500'} text-white px-4 py-2 rounded">${inList ? 'In My List' : 'Add to My List'}</button>
+          <button id="detailBack" class="bg-gray-100 px-4 py-2 rounded">Back to Home</button>
+        </div>
+      </div>
+    `;
+    document.getElementById('backBtn').addEventListener('click', renderHomePage);
+    document.getElementById('detailBack').addEventListener('click', renderHomePage);
+    document.getElementById('detailAdd').addEventListener('click', () => { toggleAddToMyList(a.id); viewAnimeDetail(a.id); });
+  }
+
+  function toggleAddToMyList(id) {
+    if (myList[id]) delete myList[id];
+    else myList[id] = { watched: 0 };
+    saveMyList(myList);
+    renderHomePage();
+  }
+
+  function renderMyListPage() {
+    const entries = Object.keys(myList).map(k => {
+      const id = Number(k);
+      const anime = animeList.find(a => a.id === id);
+      return anime ? { id, anime, watched: myList[id].watched } : null;
+    }).filter(Boolean);
+
+    app.innerHTML = `
+      <div class="max-w-4xl mx-auto">
+        <h2 class="text-2xl font-bold mb-4">My List</h2>
+        ${entries.length ? '' : '<p class="text-gray-500">Your list is empty — add anime from the Home page.</p>'}
+        <div class="space-y-4">
+          ${entries.map(entry => {
+            const pct = Math.min(100, Math.round((entry.watched / (entry.anime.episodes || 1)) * 100));
+            return `
+            <div class="bg-white p-4 rounded-lg shadow-sm flex flex-col sm:flex-row gap-4 items-start">
+              <img src="${entry.anime.image}" class="w-full sm:w-40 h-28 object-cover rounded">
+              <div class="flex-1">
+                <div class="flex items-start justify-between gap-3">
+                  <div>
+                    <h3 class="font-semibold text-lg">${entry.anime.name}</h3>
+                    <p class="text-sm text-gray-500">${entry.anime.genre} • ${formatEpisodes(entry.anime.episodes)}</p>
+                  </div>
+                  <div class="text-sm font-semibold px-2 py-1 rounded" style="background:${entry.anime.themeColor}; color:${getContrast(entry.anime.themeColor)}">${entry.anime.score.toFixed(1)}</div>
+                </div>
+
+                <div class="mt-3">
+                  <label class="text-sm text-gray-600">Watched episodes (auto-save):</label>
+                  <div class="mt-2 flex gap-2 items-center">
+                    <input type="number" min="0" max="${entry.anime.episodes}" data-id="${entry.id}" value="${entry.watched}" class="w-24 border px-2 py-1 rounded watched-input">
+                    <div class="flex-1">
+                      <div class="progress-track">
+                        <div class="progress-fill" id="fill-${entry.id}" style="width: ${pct}%; background: ${entry.anime.themeColor};"></div>
+                      </div>
+                      <div class="text-xs text-gray-500 mt-1">${entry.watched} / ${entry.anime.episodes} (${pct}%)</div>
+                    </div>
+                    <button data-id="${entry.id}" class="ml-2 bg-red-500 text-white px-3 py-1 rounded remove-btn">Remove</button>
+                  </div>
+                </div>
+              </div>
+            </div>`;
+          }).join('')}
+        </div>
+      </div>
+    `;
+
+    // attach listeners to watched inputs
+    app.querySelectorAll('.watched-input').forEach(inp => {
+      inp.addEventListener('input', (e) => {
+        const id = Number(inp.getAttribute('data-id'));
+        let val = parseInt(inp.value || 0, 10);
+        if (isNaN(val) || val < 0) val = 0;
+        const anime = animeList.find(a => a.id === id);
+        if (!anime) return;
+        if (val > anime.episodes) val = anime.episodes;
+        myList[id].watched = val;
+        saveMyList(myList);
+        updateProgressFill(id, val, anime.episodes, anime.themeColor);
+        // update small stat text
+        const pct = Math.min(100, Math.round((val / (anime.episodes || 1)) * 100));
+        const stat = inp.parentElement.querySelector('.text-xs');
+        if (stat) stat.textContent = `${val} / ${anime.episodes} (${pct}%)`;
+      });
+    });
+
+    // remove buttons
+    app.querySelectorAll('.remove-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const id = Number(btn.getAttribute('data-id'));
+        delete myList[id];
+        saveMyList(myList);
+        renderMyListPage();
+      });
+    });
+  }
+
+  function updateProgressFill(id, watched, total, themeColor) {
+    const pct = Math.min(100, Math.round((watched / (total || 1)) * 100));
+    const el = document.getElementById('fill-' + id);
+    if (el) { el.style.width = pct + '%'; el.style.background = themeColor; }
+  }
+
+  function renderProfilePage() {
+    app.innerHTML = `
+      <div class="max-w-md mx-auto bg-white p-6 rounded-lg shadow-sm text-center">
+        <h2 class="text-2xl font-bold mb-3">Profile</h2>
+        <p class="text-gray-700 mb-2">Username: <strong>${username || 'Guest'}</strong></p>
+        <p class="text-gray-700 mb-2">Role: <strong>${isAdmin ? 'Admin' : 'User'}</strong></p>
+        <p class="text-gray-700">My List contains <strong>${Object.keys(myList).length}</strong> items</p>
+      </div>
+    `;
+  }
+
+  function renderAdminPage() {
+    // show admin add form + current list with delete icons
+    app.innerHTML = `
+      <div class="max-w-4xl mx-auto bg-white p-6 rounded-lg shadow-sm">
+        <h2 class="text-2xl font-bold mb-4">Admin Panel — Manage Anime</h2>
+
+        <form id="addAnimeForm" class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6">
+          <input id="a_name" placeholder="Name" class="border px-3 py-2 rounded" required>
+          <input id="a_genre" placeholder="Genre" class="border px-3 py-2 rounded" required>
+          <input id="a_score" placeholder="Score" type="number" step="0.1" class="border px-3 py-2 rounded" required>
+          <input id="a_eps" placeholder="Episodes" type="number" class="border px-3 py-2 rounded" required>
+          <input id="a_image" placeholder="Image URL (optional)" class="border px-3 py-2 rounded col-span-full">
+          <input id="a_color" placeholder="Theme color (hex) e.g. #ffd7a8" class="border px-3 py-2 rounded" value="#ffd7a8">
+          <textarea id="a_desc" placeholder="Description" class="border px-3 py-2 rounded col-span-full"></textarea>
+          <button class="col-span-full bg-red-600 text-white py-2 rounded">Add Anime</button>
+        </form>
+
+        <div class="divide-y">
+          ${animeList.map(a => `
+            <div class="py-3 flex items-center justify-between gap-3">
+              <div class="flex items-center gap-3">
+                <img src="${a.image}" class="w-20 h-12 object-cover rounded">
+                <div>
+                  <div class="font-semibold">${a.name}</div>
+                  <div class="text-sm text-gray-500">${a.genre} • ${formatEpisodes(a.episodes)} • ⭐ ${a.score}</div>
+                </div>
+              </div>
+              <div class="flex items-center gap-2">
+                <button data-id="${a.id}" class="icon-btn text-gray-600 hover:text-red-600 delete-icon" title="Delete">
+                  <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6M9 7V4a1 1 0 011-1h4a1 1 0 011 1v3" />
+                  </svg>
+                </button>
+              </div>
+            </div>`).join('')}
+        </div>
+      </div>
+    `;
+
+    // add form
+    document.getElementById('addAnimeForm').addEventListener('submit', (e) => {
+      e.preventDefault();
+      const name = document.getElementById('a_name').value.trim();
+      const genre = document.getElementById('a_genre').value.trim() || 'Misc';
+      const score = parseFloat(document.getElementById('a_score').value) || 0;
+      const eps = parseInt(document.getElementById('a_eps').value) || 1;
+      const img = document.getElementById('a_image').value.trim() || `https://placehold.co/600x400/${randomColor().slice(1)}/1d3557?text=${encodeURIComponent(name)}`;
+      const color = document.getElementById('a_color').value.trim() || randomColor();
+      const desc = document.getElementById('a_desc').value.trim() || 'No description provided.';
+      const newId = (animeList.reduce((m,a)=>Math.max(m,a.id), 0) || 0) + 1;
+      const newAnime = { id: newId, name, score, episodes: eps, genre, themeColor: color, image: img, description: desc };
+      animeList.push(newAnime);
+      saveAnimeList(animeList);
+      alert('Anime added successfully.');
+      renderAdminPage();
+    });
+
+    // delete icons
+    app.querySelectorAll('.delete-icon').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const id = Number(btn.getAttribute('data-id'));
+        const anime = animeList.find(a => a.id === id);
+        if (!anime) return;
+        const ok = confirm(`Delete "${anime.name}"? This will remove it from Home and all users' My List.`)
+        if (!ok) return;
+        // remove from animeList
+        animeList = animeList.filter(a => a.id !== id);
+        saveAnimeList(animeList);
+        // remove from everyone's myList
+        if (myList[id]) {
+          delete myList[id];
+          saveMyList(myList);
+        }
+        renderAdminPage();
+      });
+    });
+  }
+
+  /***********************
+   * Navigation handlers
+   ***********************/
+  function setGenre(g) { currentGenre = g; renderHomePage(); }
+  homeBtn.addEventListener('click', () => { renderHomePage(); });
+  myListBtn.addEventListener('click', () => { renderMyListPage(); });
+  profileBtn.addEventListener('click', () => { renderProfilePage(); });
+  adminBtn.addEventListener('click', () => { renderAdminPage(); });
+  loginBtn.addEventListener('click', () => { renderLoginPage(); });
+  logoutBtn.addEventListener('click', () => { handleLogout(); });
+
+  function handleLogout() {
+    // Reset state
+    loggedIn = false;
+    isAdmin = false;
+    username = '';
+    // Update nav and go to login
+    updateNav();
+    renderLoginPage();
+  }
+
+  /***********************
+   * Start
+   ***********************/
+  initData();
+  renderLoginPage();
+
+  </script>
+</body>
+</html>
